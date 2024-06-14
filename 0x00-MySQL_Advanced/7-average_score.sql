@@ -1,3 +1,4 @@
+-- Source: https://www.codewars.com/kata/5a1a9e3c1e4b7f3b6b0000d0
 DELIMITER $$
 
 DROP PROCEDURE IF EXISTS ComputeAverageScoreForUser $$
