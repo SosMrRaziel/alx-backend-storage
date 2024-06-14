@@ -1,3 +1,4 @@
+-- Source: 0x00-MySQL_Advanced/11-need_meeting.sql
 DROP VIEW IF EXISTS need_meeting;
 CREATE VIEW need_meeting AS
 SELECT name FROM students WHERE score < 80
