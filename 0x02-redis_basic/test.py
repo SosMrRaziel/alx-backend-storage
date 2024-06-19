@@ -1,36 +1,32 @@
-#!/usr/bin/env python3
-""" Provides some stats about Nginx logs stored in Redis """
-import redis
-import uuid
-from typing import Union, Callable, Optional
-from functools import wraps
-
-
-# Decorator to count the number of times a method is called
 def count_calls(method: Callable) -> Callable:
+    """count the number of times a method is called"""
     key = method.__qualname__
 
     @wraps(method)
     def wrapper(self, *args, **kwargs):
-        self._redis.incr(key)  # Increment the counter in Redis
+        """wrapper for decorated function"""
+        self._redis.incr(key)
         return method(self, *args, **kwargs)
 
     return wrapper
 
-# Decorator to store the history of inputs and outputs for a function
+
 def call_history(method: Callable) -> Callable:
+    """ store the history of inputs and outputs for a particular function"""
     @wraps(method)
     def wrapper(self, *args, **kwargs):
+        """wrapper for the decorated function"""
         input = str(args)
-        self._redis.rpush(method.__qualname__ + ":inputs", input) # Store input
+        self._redis.rpush(method.__qualname__ + ":inputs", input)
         output = str(method(self, *args, **kwargs))
         self._redis.rpush(method.__qualname__ + ":outputs", output)
         return output
 
     return wrapper
 
-# Function to display the history of calls for a specific function
+
 def replay(fn: Callable):
+    """ display the history of calls of a particular function"""
     r = redis.Redis()
     function_name = fn.__qualname__
     value = r.get(function_name)
@@ -41,6 +37,7 @@ def replay(fn: Callable):
 
     print("{} was called {} times:".format(function_name, value))
     inputs = r.lrange("{}:inputs".format(function_name), 0, -1)
+
     outputs = r.lrange("{}:outputs".format(function_name), 0, -1)
 
     for input, output in zip(inputs, outputs):
@@ -56,34 +53,42 @@ def replay(fn: Callable):
 
         print("{}(*{}) -> {}".format(function_name, input, output))
 
-# Cache class
+
 class Cache:
+    """ Cache class"""
+
     def __init__(self):
-        self._redis = redis.Redis()  # Initialize Redis client
-        self._redis.flushdb()  # Clear the database
+        """store an instance of the Redis client"""
+        self._redis = redis.Redis()
+        self._redis.flushdb()
 
     @count_calls
     @call_history
     def store(self, data: Union[str, bytes, int, float]) -> str:
-        random_key = str(uuid.uuid4())  # Generate a random key (UUID)
-        self._redis.set(random_key, data)  # Associate data with the key
+        """generate a random key"""
+        random_key = str(uuid4())
+        self._redis.set(random_key, data)
         return random_key
 
     def get(self, key: str,
             fn: Optional[callable] = None) -> Union[str, bytes, int, float]:
-        value = self._redis.get(key)  # Retrieve data from Redis
+        """ get data from redis"""
+        value = self._redis.get(key)
         if fn:
-            value = fn(value)  # Apply conversion function if provided
+            value = fn(value)
         return value
 
     def get_str(self, key: str) -> str:
+        """ automatically parametrize Cache.get with the correct
+        conversion function"""
         value = self._redis.get(key)
-        return value.decode("utf-8")  # Convert to string
+        return value.decode("utf-8")
 
     def get_int(self, key: str) -> int:
+        """ automatically parametrize Cache.get with the correct """
         value = self._redis.get(key)
         try:
-            value = int(value.decode("utf-8"))  # Convert to integer
+            value = int(value.decode("utf-8"))
         except Exception:
             value = 0
         return value
