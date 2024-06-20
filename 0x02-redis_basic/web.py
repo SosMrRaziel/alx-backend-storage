@@ -1,34 +1,39 @@
 #!/usr/bin/env python3
-""" Provides some stats about Nginx logs stored in Redis """
-import requests
+'''A module with tools for request caching and tracking.
+'''
 import redis
-import time
+import requests
 from functools import wraps
+from typing import Callable
 
-# Initialize Redis client
-r = redis.Redis(host='localhost', port=6379, db=0)
 
-def cache_page(url):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Check if URL is already cached
-            cached_content = r.get(f"content:{url}")
-            if cached_content:
-                print(f"Using cached content for {url}")
-                return cached_content.decode('utf-8')
+# Initialize a Redis store
+redis_store = redis.Redis()
 
-            # Fetch content from the URL
-            response = requests.get(url)
-            content = response.text
 
-            # Cache the content with expiration time
-            r.setex(f"content:{url}", 10, content)
+def data_cacher(method: Callable) -> Callable:
+    """Decorator to cache the output of a method."""
+    @wraps(method)
+    def invoker(url) -> str:
+        """Invokes the method and caches the result."""
+        # Increment the count for the given URL
+        redis_store.incr(f'count:{url}')
+        result = redis_store.get(f'result:{url}')
+        if result:
+            # If the result is cached, return it
+            return result.decode('utf-8')
+        # Otherwise, compute the result using the method
+        result = method(url)
+        # Reset the count for the URL
+        redis_store.set(f'count:{url}', 0)
+        # Cache the result for 10 seconds
+        redis_store.setex(f'result:{url}', 10, result)
+        return result
 
-            return content
-        return wrapper
-    return decorator
+    return invoker
 
-@cache_page("http://slowwly.robertomurray.co.uk/delay/1000/url/https://www.example.com")
+
+@data_cacher
 def get_page(url: str) -> str:
+    """Returns the content of a web page."""
     return requests.get(url).text
